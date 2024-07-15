@@ -1,0 +1,191 @@
+#!/bin/env bash
+
+WORKDIR="$PWD"
+CheckOnly=true
+
+handle_error() {
+    echo "Error: $1" >&2
+    exit 1
+}
+
+usage() {
+    echo "Usage: $0 [-d /path/to/dir] [-u] [-h]"
+    echo "  -d    Set path to workdir"
+    echo "  -u    Update or download ISOs"
+    echo "  -h    Print help"
+}
+
+download() {
+    URL=$1
+    Target=$2
+    Offset=$(echo $(du -b $Target 2> /dev/null || echo 0) | awk '{print $1}')
+    Size=$(( $(curl -s -L -I "$URL" | sed 's/\r//g' | awk '/Content-Length/ {print $2}') - $Offset ))
+    curl -s --fail --retry 3 -C $Offset -L "$URL" | pv -petrafb -s "$Size" >> "$Target" || handle_error "Failed to download $URL"
+}
+
+is_greater() {
+    # return true if version $1 greater then $2
+    [[ $1 == $2 ]] && return 1
+    Greater=$(echo -e "$1\n$2" | sort -V | tail -n 1)
+    return $( [[ $1 == $Greater ]] )
+}
+
+UpdateISO() {
+    Name=$1
+    Current=$2
+    URL=$3
+    Latest=$(basename "$URL" | awk -F '?' '{print $1}')
+    SHA256=$4
+    
+    [[ $URL =~ https?://.*+(\.iso|\.zip|\.img) ]] || handle_error "Not found link for $Name"
+    [[ $SHA256 == "none" ]] || [[ ${#SHA256} -eq 64 ]] || handle_error "Not fond sha256 hash for $Name"
+    
+    echo -n "$Name: "
+    if is_greater $(echo $Latest | sed 's/.zip//g') $Current;then
+        if $CheckOnly; then
+            echo "$(echo $Latest | sed 's/.zip//g') is avalible"
+        else
+            echo "Updating..."
+            if [[ $Current != "" ]];then
+                echo "Remove old iso: $Current"
+                rm -f "$WORKDIR/$Current"
+            fi
+
+            echo "Download: $Latest"
+            download $URL "$WORKDIR/$Latest.part"
+           
+            if [[ $SHA256 != "none" ]];then
+                echo "$SHA256 $WORKDIR/$Latest.part" | sha256sum -c - > /dev/null
+                if [ $? -gt 0 ]; then
+                    rm -f "$WORKDIR/$Latest.part"
+                    handle_error "SHA256"
+                fi
+            fi
+            mv "$WORKDIR/$Latest.part" "$WORKDIR/$Latest"
+            echo "$Name secusfull updated!"
+            
+            if [[ $Latest == *".zip" ]]; then
+                unzip -p "$WORKDIR/$Latest" > "$WORKDIR/$(echo $Latest | sed 's/.zip//g')"
+                rm -f "$WORKDIR/$Latest"
+            fi
+        fi
+    else
+        echo "Latest"
+    fi
+}
+
+command -v curl &> /dev/null || handle_error "curl not found!"
+command -v pv &> /dev/null || handle_error "pv not found!"
+command -v sha256sum &> /dev/null || handle_error "sha256sum not found!"
+
+while getopts ":d:uh" opt; do
+    case ${opt} in
+        d )
+            WORKDIR=$OPTARG
+            stat $WORKDIR > /dev/null || exit 1;
+            [ -w "$WORKDIR" ] || handle_error "No permission to write to $WORKDIR!"
+            ;;
+        u )
+            CheckOnly=false
+            ;;
+        h )
+            usage
+            exit 0
+            ;;
+        \? )
+            echo "Invalid option: -$OPTARG" >&2
+            usage
+            exit 1
+            ;;
+        : )
+            echo "Option -$OPTARG requires an argument." >&2
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+#Debian
+Current=$(basename $(find "$WORKDIR" -name "debian-*-amd64-netinst.iso" | sort -r -V) 2> /dev/null)
+Latest=$(curl -s "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/" | grep -m 1 "amd64-netinst.iso" | awk -F'"' '{print $14}')
+SHA256=$(curl -s "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS" | awk -F " " 'NR == 1 {print $1}')
+UpdateISO "Debian" "$Current" "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/$Latest" "$SHA256"
+
+#Arch Linux
+Current=$(basename $(find "$WORKDIR" -name "archlinux-*-x86_64.iso" | sort -r -V) 2> /dev/null)
+Latest=$(curl -s "https://ftp.agdsn.de/pub/mirrors/archlinux/iso/latest/" | grep -m 1 "\.iso" | awk -F'"' '{print $2}')
+SHA256=$(curl -s "https://ftp.agdsn.de/pub/mirrors/archlinux/iso/latest/sha256sums.txt" | awk -F " " 'NR == 1 {print $1}')
+UpdateISO "Arch" "$Current" "https://ftp.agdsn.de/pub/mirrors/archlinux/iso/latest/$Latest" "$SHA256"
+
+#Kali linux
+Current=$(basename $(find "$WORKDIR" -name "kali-linux-*-live-amd64.iso" | sort -r -V) 2> /dev/null)
+Latest=$(curl -s "https://kali.download/base-images/current/" | grep -m 1 "live-amd64\.iso" | awk -F'"' '{print $4}')
+SHA256=$(curl -s "https://kali.download/base-images/current/SHA256SUMS" | awk -F " " '/kali-linux-.*-live-amd64\.iso$/ {print $1}')
+UpdateISO "Kali" "$Current" "https://kali.download/base-images/current/$Latest" "$SHA256"
+
+#Manjaro KDE
+Current=$(basename $(find "$WORKDIR" -name "manjaro-kde-*.iso" | sort -r -V) 2> /dev/null)
+Latest=$(curl -s -L "https://manjaro.org/products/download/x86" | sed 's/"/\n/g'  | awk '/manjaro-kde-.*\.iso/')
+SHA256=$(curl -s "$Latest.sha256" |  awk -F " " '{print $1}')
+UpdateISO "Manjaro Kde" "$Current" "$Latest" "$SHA256"
+
+#Fedora
+Current=$(basename $(find "$WORKDIR" -name "Fedora-Workstation-Live-x86_64-*.iso") 2>/dev/null | sort -r -V)
+Latest=$(curl -s -L "https://fedoraproject.org/ru/workstation/download" | sed 's/"/\n/g' | awk '/Fedora-Workstation-Live-x86_64-.*\.iso/')
+SHA256=$(curl -s -L $(dirname $Latest) | sed 's/</\n/g' | awk -F '"' '/Fedora-Workstation-.*-CHECKSUM/ {print $2}')
+SHA256=$(curl -s -L "$(dirname $Latest)/$SHA256" | awk -F ' = ' '/SHA256 \(Fedora-Workstation-Live-x86_64-.*\.iso\)/{print $2}')
+UpdateISO "Fedora" "$Current" "$Latest" "$SHA256"
+
+#Memtest86+ (x64)
+Current=$(basename $(find "$WORKDIR" -name "mt86plus_*_64.iso") 2>/dev/null | sort -r -V)
+Latest="https://www.memtest.org$(curl -s -L "https://www.memtest.org/" | awk -F '"' '/Linux ISO \(64 bits\)/ {print $2}')"
+SHA256=$(curl -s -L $(dirname $Latest)/sha256sum.txt | awk -F " " '/.*_64.iso.zip$/ {print $1}')
+UpdateISO 'Memtest86+ (x64)' "$Current" "$Latest" "$SHA256"
+
+#Memtest86+ (x32)
+Current=$(basename $(find "$WORKDIR" -name "mt86plus_*_32.iso") 2>/dev/null | sort -r -V)
+Latest="https://www.memtest.org$(curl -s -L "https://www.memtest.org/" | awk -F '"' '/Linux ISO \(32 bits\)/ {print $2}')"
+SHA256=$(curl -s -L $(dirname $Latest)/sha256sum.txt | awk -F " " '/.*_32.iso.zip$/ {print $1}')
+UpdateISO 'Memtest86+ (x32)' "$Current" "$Latest" "$SHA256"
+
+#Linux Mint Cinnamon
+Current=$(basename $(find "$WORKDIR" -name "linuxmint-*-cinnamon-64bit.iso") 2>/dev/null | sort -r -V)
+Latest=$(basename $(curl -s -L "https://mirror.dogado.de/linuxmint-cd/stable/" | awk -F '"' '/[0-9]+\.[0-9]+/ {print $2}' | tail -n 1))
+Latest="https://mirror.dogado.de/linuxmint-cd/stable/$Latest/linuxmint-$Latest-cinnamon-64bit.iso"
+SHA256=$(curl -s -L $(dirname $Latest)/sha256sum.txt | awk -F " " '/linuxmint-.*-cinnamon-64bit.iso/ {print $1}')
+UpdateISO "Linux Mint Cinnamon" "$Current" "$Latest" "$SHA256"
+
+#Linux Mint XFCE
+Current=$(basename $(find "$WORKDIR" -name "linuxmint-*-xfce-64bit.iso") 2>/dev/null | sort -r -V)
+Latest=$(basename $(curl -s -L "https://mirror.dogado.de/linuxmint-cd/stable/" | awk -F '"' '/[0-9]+\.[0-9]+/ {print $2}' | tail -n 1))
+Latest="https://mirror.dogado.de/linuxmint-cd/stable/$Latest/linuxmint-$Latest-xfce-64bit.iso"
+SHA256=$(curl -s -L $(dirname $Latest)/sha256sum.txt | awk -F " " '/linuxmint-.*-xfce-64bit.iso/ {print $1}')
+UpdateISO "Linux Mint XFCE" "$Current" "$Latest" "$SHA256"
+
+#Ubuntu LTS
+StartURL="https://mirror.vinehost.net/ubuntu-releases/"
+Current=$(basename $(find "$WORKDIR" -name "ubuntu-*-desktop-amd64.iso") 2>/dev/null | sort -r -V)
+StartURL=$StartURL$(curl -s -L "$StartURL" | awk -F '"' '/Ubuntu .* LTS/ {print $4; exit}')
+Latest=$StartURL$(curl -s -L "$StartURL/" | awk -F '"' '/ubuntu-.*-desktop-amd64\.iso/ {print $2; exit}')
+SHA256=$(curl -s -L $StartURL/SHA256SUMS | awk -F " " '/ubuntu-.*-desktop-amd64\.iso/ {print $1}')
+UpdateISO "Ubuntu LTS" "$Current" "$Latest" "$SHA256"
+
+#Tails
+Current=$(basename $(find "$WORKDIR" -name "tails-amd64-*.img") 2>/dev/null | sort -r -V)
+Latest=$(basename $(curl -s -L "https://mirrors.edge.kernel.org/tails/stable/" | awk -F '"' '/tails-amd64-.*/ {print $2}'))
+Latest="https://mirrors.edge.kernel.org/tails/stable/$Latest/$Latest.img"
+UpdateISO "Tails" "$Current" "$Latest" "none"
+
+#Clonezilla
+Current=$(basename $(find "$WORKDIR" -name "clonezilla-live-*-amd64.iso") 2>/dev/null | sort -r -V)
+Latest=$(curl -s -L "https://clonezilla.org/downloads/download.php?branch=stable" | awk -F '"' '/id=.version./ {print $2}')
+Latest="https://kumisystems.dl.sourceforge.net/project/clonezilla/clonezilla_live_stable/$Latest/clonezilla-live-$Latest-amd64.iso?viasf=1"
+UpdateISO "Clonezilla" "$Current" "$Latest" "none"
+
+#BlissOS15
+Current=$(basename $(find "$WORKDIR" -name "Bliss-v15*-x86_64-OFFICIAL-gapps-*.iso") 2>/dev/null | sort -r -V)
+Latest=$(curl -s -L "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/Gapps/Generic/" | awk -F '"' '/<tr title=.Bliss-.*-x86_64-OFFICIAL-gapps-.*iso/ {print $2; exit}')
+SHA256="https://kumisystems.dl.sourceforge.net/project/blissos-x86/Official/BlissOS15/Gapps/Generic/$Latest?viasf=1"
+Latest=$(echo $SHA256 | sed 's/\.sha256//')
+SHA256=$(curl -s -L "$SHA256" | awk '{print $1}')
+UpdateISO "BlissOS15" "$Current" "$Latest" "$SHA256"

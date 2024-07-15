@@ -1,0 +1,10 @@
+Package: isoloader
+Version: 1.0
+Section: unknown
+Priority: optional
+Depends: curl,pv,coreutils
+Architecture: all
+Essential: no
+Installed-Size: 0
+Maintainer: oleg
+Description: Script for download ISOs
