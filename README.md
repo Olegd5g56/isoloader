@@ -8,3 +8,18 @@ Install the deb package from releases or use `make install`. Alternatively, down
 # Usage
 `isloader -d /path/to/dir/iso/` - check update<br>
 `isloader -d /path/to/dir/iso/ -u` - update/download
+
+# Avalible ISO
+Debian <br>
+Arch <br>
+Kali <br>
+Manjaro Kde <br>
+Fedora <br>
+Memtest86+ (x64) <br>
+Memtest86+ (x32) <br>
+Linux Mint Cinnamon <br>
+Linux Mint XFCE <br>
+Ubuntu LTS <br>
+Tails <br>
+Clonezilla <br>
+BlissOS15 <br>
