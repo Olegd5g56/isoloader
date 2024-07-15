@@ -9,7 +9,7 @@ Install the deb package from releases or use `make install`. Alternatively, down
 `isloader -d /path/to/dir/iso/` - check update<br>
 `isloader -d /path/to/dir/iso/ -u` - update/download
 
-# Avalible ISO
+# Available ISO
 Debian <br>
 Arch <br>
 Kali <br>
