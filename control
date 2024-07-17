@@ -1,5 +1,5 @@
 Package: isoloader
-Version: 1.0
+Version:
 Section: unknown
 Priority: optional
 Depends: curl,pv,coreutils

@@ -1,4 +1,5 @@
 #!/bin/env bash
+#V1.1
 
 WORKDIR="$PWD"
 CheckOnly=true
@@ -172,7 +173,7 @@ UpdateISO "Ubuntu LTS" "$Current" "$Latest" "$SHA256"
 
 #Tails
 Current=$(basename $(find "$WORKDIR" -name "tails-amd64-*.img") 2>/dev/null | sort -r -V)
-Latest=$(basename $(curl -s -L "https://mirrors.edge.kernel.org/tails/stable/" | awk -F '"' '/tails-amd64-.*/ {print $2}'))
+Latest=$(basename $(curl -s -L "https://mirrors.edge.kernel.org/tails/stable/" | awk -F '"' '/tails-amd64-.*/ {print $2}' | tail -n 1))
 Latest="https://mirrors.edge.kernel.org/tails/stable/$Latest/$Latest.img"
 UpdateISO "Tails" "$Current" "$Latest" "none"
 
