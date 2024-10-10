@@ -1,5 +1,5 @@
 #!/bin/env bash
-#V1.1
+#V1.2
 
 WORKDIR="$PWD"
 CheckOnly=true
@@ -20,7 +20,7 @@ download() {
     URL=$1
     Target=$2
     Offset=$(echo $(du -b $Target 2> /dev/null || echo 0) | awk '{print $1}')
-    Size=$(( $(curl -s -L -I "$URL" | sed 's/\r//g' | awk '/Content-Length/ {print $2}') - $Offset ))
+    Size=$(( $(curl -s -L -I "$URL" | sed 's/\r//g' | grep -i "Content-Length" | awk '{print $2}') - $Offset ))
     curl -s --fail --retry 3 -C $Offset -L "$URL" | pv -petrafb -s "$Size" >> "$Target" || handle_error "Failed to download $URL"
 }
 
@@ -56,6 +56,7 @@ UpdateISO() {
             download $URL "$WORKDIR/$Latest.part"
            
             if [[ $SHA256 != "none" ]];then
+                echo "Checksum verification..."
                 echo "$SHA256 $WORKDIR/$Latest.part" | sha256sum -c - > /dev/null
                 if [ $? -gt 0 ]; then
                     rm -f "$WORKDIR/$Latest.part"
@@ -190,3 +191,16 @@ SHA256="https://kumisystems.dl.sourceforge.net/project/blissos-x86/Official/Blis
 Latest=$(echo $SHA256 | sed 's/\.sha256//')
 SHA256=$(curl -s -L "$SHA256" | awk '{print $1}')
 UpdateISO "BlissOS15" "$Current" "$Latest" "$SHA256"
+
+#Proxmox VE
+Current=$(basename $(find "$WORKDIR" -name "proxmox-ve_*.iso") 2>/dev/null | sort -r -V)
+Latest=$(basename $(curl -s -L "https://enterprise.proxmox.com/iso/" | awk -F '"' '/[0-9]+\.[0-9]+/ {print $2}' | tail -n 1))
+SHA256=$(curl -s -L "https://enterprise.proxmox.com/iso/SHA256SUMS" | grep "$Latest" | awk '{print $1}')
+Latest="https://enterprise.proxmox.com/iso/$Latest"
+UpdateISO "Proxmox VE" "$Current" "$Latest" "$SHA256"
+
+#TrueNAS Core
+Current=$(basename $(find "$WORKDIR" -name "TrueNAS-*.iso") 2>/dev/null | sort -r -V)
+Latest=$(curl -s -L "https://www.truenas.com/download-truenas-core/" | awk -F '"' '/id="downloadTrueNAS"/{print $6}')
+SHA256=$(curl -s -L "$Latest.sha256" | awk '{print $4}')
+UpdateISO "TrueNAS Core" "$Current" "$Latest" "$SHA256"

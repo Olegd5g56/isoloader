@@ -23,3 +23,5 @@ Ubuntu LTS <br>
 Tails <br>
 Clonezilla <br>
 BlissOS15 <br>
+Proxmox VE <br>
+TrueNAS Core <br>
