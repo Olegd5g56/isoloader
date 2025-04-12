@@ -187,7 +187,7 @@ UpdateISO "Clonezilla" "$Current" "$Latest" "none"
 #BlissOS15
 Current=$(basename $(find "$WORKDIR" -name "Bliss-v15*-x86_64-OFFICIAL-gapps-*.iso") 2>/dev/null | sort -r -V)
 Latest=$(curl -s -L "https://sourceforge.net/projects/blissos-x86/files/Official/BlissOS15/Gapps/Generic/" | awk -F '"' '/<tr title=.Bliss-.*-x86_64-OFFICIAL-gapps-.*iso/ {print $2; exit}')
-SHA256="https://kumisystems.dl.sourceforge.net/project/blissos-x86/Official/BlissOS15/Gapps/Generic/$Latest?viasf=1"
+SHA256="https://deac-fra.dl.sourceforge.net/project/blissos-x86/Official/BlissOS15/Gapps/Generic/$Latest?viasf=1"
 Latest=$(echo $SHA256 | sed 's/\.sha256//')
 SHA256=$(curl -s -L "$SHA256" | awk '{print $1}')
 UpdateISO "BlissOS15" "$Current" "$Latest" "$SHA256"
